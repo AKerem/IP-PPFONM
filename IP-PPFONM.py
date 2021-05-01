@@ -40,7 +40,7 @@ rc('text', usetex=True)
 ################################################# IP-PPFONM PARAMETERS  ################################################# 
 
 numberOfReceivers=3 # How many receivers exists in the indoor environment
-sensitivityOfResult=0.1 # How many meters should be between each search points in our multilateration algorithm (to find the best position)
+sensitivityOfResult=0.2 # How many meters should be between each search points in our multilateration algorithm (to find the best position)
 maxSignalError=5 # What is the maximum signal noise in terms of dBm in the indoor environment
 numberOfBlocks=2 # How many block exists in the indoor environment
 #blockWidth=np.minimum( (xdims[1] - xdims[0]), (ydims[1]-ydims[0] ) ) / 8
@@ -74,8 +74,8 @@ prevMotionRepeatProb=0.75 # Constant representing how much our past movement sho
 
 
 numberOfRooms=0 # How much room are there in the indoor environment (IE)
-#roomWidth=np.minimum( (xdims[1] - xdims[0]), (ydims[1]-ydims[0] ) ) / 8    #Remove the comment if room(s) should be created by the simulation
-#roomLength=np.minimum( (xdims[1] - xdims[0]), (ydims[1]-ydims[0] ) ) / 6   #Remove the comment if room(s) should be created by the simulation
+#roomWidth=np.minimum( (xdims[1] - xdims[0]), (ydims[1]-ydims[0] ) ) / 8    #Uncomment if room(s) should be created by the simulation
+#roomLength=np.minimum( (xdims[1] - xdims[0]), (ydims[1]-ydims[0] ) ) / 6   #Uncomment if room(s) should be created by the simulation
 roomWidth=[5,4]     # Comment out this line if room(s) should be created by the simulation
 roomLength=[12,3]   # Comment out this line if room(s) should be created by the simulation
 # roomPositions = [ [6.75,7] ] 
@@ -115,12 +115,18 @@ rssiAtOne=TX_Power-65 # How much RSSI values is received when a receiver device 
 # Use predefined position only if you know the trajectory of the POI (Only usable in off-line usage of the IP-PPFONM algorithm)
 predefinedPos=np.array([ [13,10.5], [12.5,9.7], [12,9.1], [11.5,8.5], [11.2,7.5],[11.2,6.6] ,[11,5.6], [10.5,4.8], [10.2,4.5], [9.5,4.1], [8.5,4.3], [7.7,4.5], [6.8,5.3],[6.3,6.1],[6.0,6.9],[5.3,7.3] ] )
 
-# UNCOMMENT THE FOLLOWING FOUR LINES TO USE FINGERPRINTING INFORMATION IN THE IP-PPFONM ALGORITHM (remove the related comments in "custom_minimize" function for fingerprinting )
-fingerPrintingBeaconPositions=np.array( [ [0.25,3],  [5,   5.5   ], [11.5,   3.5   ], [12.5, 9   ] ] )
-fingerPrintingSignalStrengthBeaconsToReceivers=np.array([ [ -76, -73, -86, -82    ], [ -84, -81, -67, -72   ], [ -83, -77, -85, -89   ] ]) # 4 Beacon to each of the 3 receivers
-InterpolatedMapForReceivers=None
-RSSIinFP={} # make it a dictionary where the key is 2d position
-FP_coeff=0.2
+# Set UseFingerPrintingIn_IPPPFONM to True to use fingerprinting (FP) info in IP-PPFONM 
+# and set the FP variables below according to the setup used. Set UseFingerPrintingIn_IPPPFONM to False if FP is
+# not to be used in IP-PPFONM algorithm to make the code run faster
+UseFingerPrintingIn_IPPPFONM=False  
+if UseFingerPrintingIn_IPPPFONM: # set FP related variables globally if UseFingerPrintingIn_IPPPFONM is True
+	global fingerPrintingBeaconPositions, fingerPrintingSignalStrengthBeaconsToReceivers, InterpolatedMapForReceivers, RSSIinFP, FP_coeff
+	fingerPrintingBeaconPositions=np.array( [ [0.25,3],  [5,   5.5   ], [11.5,   3.5   ], [12.5, 9   ] ] )
+	fingerPrintingSignalStrengthBeaconsToReceivers=np.array([ [ -76, -73, -86, -82    ], [ -84, -81, -67, -72   ], [ -83, -77, -85, -89   ] ]) # 4 Beacon to each of the 3 receivers
+	InterpolatedMapForReceivers=None
+	RSSIinFP={} # make it a dictionary where the key is 2d position
+	FP_coeff=0.2 #  set it to zero if fingerprinting info SHALL NOT BE TAKEN INTO ACCOUNT in IP-PPFONM algorithm
+
 
 ################################################# IP-PPFONM PARAMETERS FINISHED  ################################################# 
 
@@ -138,17 +144,19 @@ def main():
 
     receiverPositions=getReceiverPositionsToInstall(xdims,ydims,numberOfReceivers)
 
-    blockPositions=getBlockPositionsToInstall(xdims=xdims,ydims=ydims,numberOfBlocks=numberOfBlocks) # install blocks without overlapping
-    roomPositions=getRoomPositionsToInstall(xdims=xdims,ydims=ydims,numberOfRooms=numberOfRooms,roomBoundary=roomWallWidth/2)
-
+    blockPositions=getBlockPositionsToInstall(xdims=xdims,ydims=ydims,numberOfBlocks=numberOfBlocks) # Comment out to generate block positions automatically for the simulation
+    roomPositions=getRoomPositionsToInstall(xdims=xdims,ydims=ydims,numberOfRooms=numberOfRooms,roomBoundary=roomWallWidth/2) # Comment out to generate room positions automatically for the simulation
+    #blockPositions=[[5,3],[9,8]]       # Uncomment and fill this variable to manually enter the block position information
     #roomPositions=[[7.5,9.5],[7,3.5]]  # Uncomment and fill this variable to manually enter the room position information
-    #blockPositions=[[5,3],[9,8]]       # Uncomment and fill this variable to manually enter the room position information
+    
   
     blockMaterials=np.random.choice(materials, numberOfBlocks) # Comment out this line to let the simulation place the blocks inside the indoor environment
-    roomMaterials=np.random.choice(materials, numberOfRooms)   # Comment out this line to let the simulation place the blocks inside the indoor environment
+    roomMaterials=np.random.choice(materials, numberOfRooms)   # Comment out this line to let the simulation place the rooms inside the indoor environment
 
-    #interpolateFingerPrintingResult() # Comment out this line to use fingerprinting information in the IP-PPFONM algorithm (in custom_minimize function)
+    if UseFingerPrintingIn_IPPPFONM:
+    	interpolateFingerPrintingResult()
 
+    print("totalIterNo chosen as: ", totalIterNo)
     # track each POI in a new process
     AllProcesses=[]
     for i in range(totalNumberOfPeople):
@@ -336,7 +344,27 @@ class POI:
         distances = np.linalg.norm(self.particles - self.averaged_beacon_pos, axis=1)
 
         self.weights *= np.sum(distances)/distances
-        self.weights += 10**(-30)      # avoid round-off to zero
+        
+
+        # SET ALL WEIGHTS INTERSECTING WITH AN OBSTRUCTION TO ZERO (so that particles do not accumulate on obstructions)
+        for particleIndex, particle in enumerate(self.particles):
+            isCollision=False
+            for blockPosition in blockPositions:
+                #if checkCircleCollision_WithRectangle(tmpBeaconPos,OOIWidth,OOIHeight,blockPosition,blockWidth,blockLength):
+                if checkEllipseRectangleIntersection(particle,particleWidth,particleHeight,blockPosition,blockWidth,blockLength):
+                    isCollision=True
+                    break
+            if not isCollision:
+                for roomIndex,roomPosition in enumerate(roomPositions):
+                    #if checkCircleCollision_WithRectangle(tmpBeaconPos,beaconRadius,roomPosition,roomWidth[roomIndex],roomLength[roomIndex]):
+                    #print "room wall width is: " + str(roomWallWidth)
+                    # use roomWallWidth/2, since linewidth expands toward outside and inside (for roomWallWidth, expands roomWallWidth/2 towards inside and roomWallWidth/2 towards outside)
+                    if checkEllipseRectangleIntersection(particle,particleWidth,particleHeight,roomPosition,roomWidth[roomIndex],roomLength[roomIndex],boundaryForRect=roomWallWidth[roomIndex]/2):
+                        isCollision=True
+                        break 
+            if isCollision:
+                self.weights[particleIndex]=0
+        self.weights += 10**(-300)       # avoid round-off to zero
         self.weights /= sum(self.weights) # normalize
 
     # Resample N_eff
@@ -366,7 +394,9 @@ class POI:
             isCollision=False
          
 
-            # COMMENT OUT "SIGNAL WEAKING CODE BLOCK BELOW TO USE IP-PPFONM FOR A REAL-WORLD APPLICATION SINCE IN REAL-WORLD, WEAKEANING NATURALLY HAPPENS"
+            # Comment out "SIGNAL WEAKENING CODE BLOCK" BELOW TO USE IP-PPFONM FOR A REAL-WORLD APPLICATION SINCE IN REAL-WORLD, WEAKEANING NATURALLY HAPPENS
+            ##################################################### "SIGNAL WEAKENING CODE BLOCK" STARTED ######################################################
+            
             ##########################  WEAKENING THE SIGNAL DUE TO THE SIGNAL HITTING AN OBSTRUCTION (BLOCK OR ROOM) ##########################
             # this is used to weaken the signal in case there was a block or room between the receiver and the beacon
             # this simulates the signal before we catch it in real life.            
@@ -383,7 +413,8 @@ class POI:
                 if receiverBeaconRoomIntersection is not None:
                     isCollision=True
                     weakeningAmount+=np.linalg.norm(receiverBeaconRoomIntersection[0,:]-receiverBeaconRoomIntersection[1,:]) * WallRoomRatio * material_SignalDisturbance_Coefficients[ roomMaterials[roomIndex] ] * np.random.uniform(0.5,1.5)
-            ###################################################### SIGNAL WEAKING FINISHED ######################################################
+            
+            ###################################################### "SIGNAL WEAKENING CODE BLOCK" FINISHED ######################################################
 
 
             if isCollision:
@@ -650,7 +681,8 @@ def custom_minimize(RSSIofReceivers, receiverPositions,xdims,ydims,sensitivityOf
                     if receiverMeanRoomIntersection is not None:
                         strengtheningAmount+=np.linalg.norm(receiverMeanRoomIntersection[0,:]-receiverMeanRoomIntersection[1,:]) * WallRoomRatio * material_SignalDisturbance_Coefficients[ roomMaterials[roomIndex] ]   
                 
-                #xyDistToRecInFP = RSSI_to_distance(RSSIinFP[i,x,y] + strengtheningAmount ) # REMOVE THE COMMENT TO TAKE FINGERPRINTING DATA INTO CONSIDERATION
+                if UseFingerPrintingIn_IPPPFONM:
+                	xyDistToRecInFP = RSSI_to_distance(RSSIinFP[i,x,y] + strengtheningAmount )
                 xyDistToRec = np.linalg.norm( [x,y] - receiverPositions[i] )
                 # Rule 1) PUNISH THE x,y points whose distances are not compatible with the RSSI values we receive.
                 # Rule 2) Punish more when distToReceiverGivenRSSI is low since low distToReceiverGivenRSSI means high RSSI and high RSSIs are reliable.
@@ -659,19 +691,19 @@ def custom_minimize(RSSIofReceivers, receiverPositions,xdims,ydims,sensitivityOf
                     distToReceiverGivenRSSI=RSSI_to_distance( RSSIofReceivers[i] + strengtheningAmount) + safetyOffset
                     tmp_sum+=( abs( xyDistToRec - distToReceiverGivenRSSI ) / distToReceiverGivenRSSI ) ** 2 
                     
-                    # REMOVE THE COMMENTS FOR THE FOLLOWING TWO LINES TO TAKE FINGERPRINTING DATA INTO CONSIDERATION
-                    # if abs( RSSIofReceivers[i] - RSSIinFP[i,x,y] ) > maxSignalError: # if the difference is more than 5dBm for example:
-                    #    tmp_sum+=FP_coeff*(  abs( xyDistToRecInFP - distToReceiverGivenRSSI ) / distToReceiverGivenRSSI  ) ** 2
+                    if UseFingerPrintingIn_IPPPFONM:
+	                    if abs( RSSIofReceivers[i] - RSSIinFP[i,x,y] ) > maxSignalError: # if the difference is more than 5dBm for example:
+	                        tmp_sum+=FP_coeff*(  abs( xyDistToRecInFP - distToReceiverGivenRSSI ) / distToReceiverGivenRSSI  ) ** 2
 
                 # Rule 1) PUNISH THE x,y points which are close to the receivers since x,y should not be close if our receivers cannot catch a signal
                 else:  # If a receiver device (RSSIofReceivers[i]) is not able to catch a signal for the current time step
                     maxCatchableSignalDistance = RSSI_to_distance( minUsefulSignal + strengtheningAmount) + safetyOffset
                     if xyDistToRec < maxCatchableSignalDistance: # we see it as None, so it should not be closer than maxCatchableSignalDistance. If so, then punish
-                        tmp_sum+=( abs( xyDistToRec - maxCatchableSignalDistance )  / xyDistToRec ) ** 2
+                        tmp_sum+=( abs( xyDistToRec - maxCatchableSignalDistance )  / xyDistToRec ) ** 2                    
                     
-                    # REMOVE THE COMMENTS FOR THE FOLLOWING TWO LINES TO TAKE FINGERPRINTING DATA INTO CONSIDERATION
-                    #if xyDistToRecInFP - maxCatchableSignalDistance: 
-                    #    tmp_sum+=FP_coeff*(  abs( xyDistToRecInFP - maxCatchableSignalDistance ) / xyDistToRecInFP ) ** 2
+                    if UseFingerPrintingIn_IPPPFONM:
+	                    if xyDistToRecInFP - maxCatchableSignalDistance: 
+	                        tmp_sum+=FP_coeff*(  abs( xyDistToRecInFP - maxCatchableSignalDistance ) / xyDistToRecInFP ) ** 2
 
             if tmp_sum < mysum:
                 mysum = tmp_sum
@@ -737,7 +769,7 @@ def interpolateFingerPrintingResult():
                 RSSIinFP[i,x,y]=calc_relative_RSSI(base_dist,target_dist,base_RSSI)
 
 def calc_relative_RSSI(base_dist, target_dist, base_RSSI):
-    print "calc_relative_RSSI: " + str( np.log ( (target_dist+safetyOffset) / (base_dist+safetyOffset) ) ) 
+    #print "calc_relative_RSSI: " + str( np.log ( (target_dist+safetyOffset) / (base_dist+safetyOffset) ) ) 
     if target_dist >= 1:
         return base_RSSI + -20 * np.log ( (target_dist) / (base_dist+safetyOffset) )
     else:
@@ -792,6 +824,7 @@ def getReceiverPositionsToInstall(xdims,ydims,numberOfReceivers):
     return receiverPositions
 
 
+# create blocks on the map automatically for the simulation and make sure these do not intersect with any other obstructions
 def getBlockPositionsToInstall(xdims,ydims,numberOfBlocks):
     xmin,xmax,ymin,ymax= xdims[0],xdims[1],ydims[0],ydims[1]
     numberOfBlocksCreated=0
@@ -883,12 +916,12 @@ def animate(iterNo, ax, macID, currPerson, NumberOfParticles,  xdims=(0, 50), yd
     
     roomLineWidth=linewidth_from_data_units(roomWallWidth,ax)
     currPerson.move_beacon_in_map(xdims,ydims,movingLimit,movingTendency,roomBoundary=roomWallWidth/2) # Comment out to if POI position should be entered manually
-    #currPerson.beacon_pos = predefinedPos[iterNo] # remove the comment and fill this variable to determine the POI position for the current time step
+    #currPerson.beacon_pos = predefinedPos[iterNo] # Uncomment and fill this variable to determine the POI position for the current time step
     currPerson.calc_RSSIs_to_Receivers(minSignalValue,minUsefulSignal,maxSignalError )
     currPerson.setBeaconDistances_fromRSSIs(minUsefulSignal)
 
     global numberOfNotFounds
-    print iterNo
+    print("Iter no is: " + str(iterNo) )
     isProcessed=False
     if all(dist is None for dist in currPerson.distToReceivers):
         numberOfNotFounds+=1
@@ -932,16 +965,18 @@ def animate(iterNo, ax, macID, currPerson, NumberOfParticles,  xdims=(0, 50), yd
         particles_x,particles_y=np.hsplit(currPerson.particles,2)
         if not np.isnan(currPerson.covMatrix).any() or \
            not np.isinf(currPerson.covMatrix).any():
-            lambda_, v = np.linalg.eig(currPerson.covMatrix)    
-            lambda_ = np.sqrt(lambda_)
-            # Ellipse drawing code below is borrowed from Jaime's answer in https://stackoverflow.com/questions/20126061/creating-a-confidence-ellipses-in-a-sccatterplot-using-matplotlib/20127387
+            # Ellipse drawing code logic below is borrowed from Jaime's answer in https://stackoverflow.com/questions/20126061/creating-a-confidence-ellipses-in-a-sccatterplot-using-matplotlib/20127387
             #The following code draws a one, two, and three standard deviation sized ellipses:
-            color1,color2,color3=0.0,0.0,0.0
+            eigVals, eigVecs = np.linalg.eig(currPerson.covMatrix)    
+            eigVals = np.sqrt(eigVals)
             
-            for j in xrange(1, 4):
+            # larger eigenvalue should be the width and 
+            # the angle is the ccw angle between the eigenvector of the corresponding eigenvalue and the positive x axis
+            color1,color2,color3=0.0,0.0,0.0  # color components for the hollow error ellipses          
+            for j in range(1, 4):
                 ell = Ellipse(xy=(np.mean(particles_x),np.mean(particles_y)),
-                              width=lambda_[0]*j*2, height=lambda_[1]*j*2,
-                              angle=np.rad2deg(np.arccos(v[0, 0])))
+                              width=eigVals[np.argmax(abs(eigVals))]*j*2, height=eigVals[1-np.argmax(abs(eigVals))]*j*2,
+                              angle=np.rad2deg(np.arctan2(*eigVecs[:,np.argmax(abs(eigVals))][::-1]))) 
                 color1+=0.3
                 color2+=0.2
                 color3+=0.25
@@ -994,12 +1029,14 @@ def animate(iterNo, ax, macID, currPerson, NumberOfParticles,  xdims=(0, 50), yd
     plt.subplots_adjust(left=0,bottom=0.1,right=1,top=0.87,wspace=0,hspace=0)
 
   
-    # COMMENT OUT THE FOLLOWING LINES TO DRAW LEGENDS (Purple represents mean of the particles & green represents the BLE Beacon pos)
-    if isProcessed:
-        ax.legend([beaconPosPlot, muPlot, maxWeightedPlot], ['BLE Beacon Pos', 'Mean Of Particles', 'Most Weighted Particle'], loc="lower left", prop={'size': 10}, bbox_to_anchor=(0, 1))
-    else:
-        ax.legend([beaconPosPlot], ['BLE Beacon Pos'], loc="lower left", prop={'size': 10}, bbox_to_anchor=(0, 1))
-
+    # Comment out the following "LEGEND DRAWING CODE BLOCK" to show legends
+    # Draw Legends (Purple represents mean of the particles & green represents the BLE Beacon pos)  
+    ###### LEGEND DRAWING CODE BLOCK STARTED ######
+    #if isProcessed:
+    #    ax.legend([beaconPosPlot, muPlot, maxWeightedPlot], ['BLE Beacon Pos', 'Mean Of Particles', 'Most Weighted Particle'], loc="lower left", prop={'size': 10}, bbox_to_anchor=(0, 1))
+    #else:
+    #    ax.legend([beaconPosPlot], ['BLE Beacon Pos'], loc="lower left", prop={'size': 10}, bbox_to_anchor=(0, 1))
+    ###### LEGEND DRAWING CODE BLOCK FINISHED ######
 ####################################################################################################################################################################################
 
 if __name__ == '__main__':
